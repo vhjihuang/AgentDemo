@@ -1,5 +1,5 @@
 {
-  "name": "ts-node-esm-template",
+  "name": "agent-demo",
   "version": "1.0.0",
   "description": "",
   "main": "dist/index.js",
@@ -23,5 +23,11 @@
     "onlyBuiltDependencies": [
       "esbuild"
     ]
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "chalk": "^6.0.0",
+    "dotenv": "^17.4.2",
+    "openai": "^7.2.0"
   }
 }

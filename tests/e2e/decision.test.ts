@@ -143,9 +143,4 @@ describe("判定正确性", () => {
     assertNeedManualHasReason(result.decisions);
   });
 
-  test.todo("TC-10 版本区间边界 → 预发布版本与开闭区间的比较结果与 fixture 期望逐条一致");
-
-  test.todo("TC-11 事件流完整 → osv_query → code_check → decision 顺序与 seq 单调递增");
-
-  test.todo("TC-12 NEED_MANUAL 必须带枚举内原因码，空原因视为失败");
 });

@@ -21,18 +21,22 @@ export type ExecutionStatus =
 /** 尚未开始执行的排队原因。仅当 executionStatus = PENDING 时允许非空。 */
 export type DeferReason = "RATE_LIMIT" | "BACKLOG" | null;
 
+/** 结论原因码全集。运行期校验与类型推导共用同一份来源，避免测试硬编码漂移。 */
+export const REASON_CODES = [
+  "CALLED",
+  "NOT_CALLED",
+  "VERSION_NOT_AFFECTED",
+  "DYN_IMPORT_UNRESOLVABLE",
+  "EVIDENCE_MISSING",
+  "SOURCE_UNAVAILABLE",
+  "MAX_ROUNDS_EXCEEDED",
+  "FIX_VERSION_BREAKING",
+  "PACKAGE_DEPRECATED",
+  "RATE_LIMIT",
+] as const;
+
 /** 结论原因码。NEED_MANUAL 必须带非空的 ReasonCode。 */
-export type ReasonCode =
-  | "CALLED"
-  | "NOT_CALLED"
-  | "VERSION_NOT_AFFECTED"
-  | "DYN_IMPORT_UNRESOLVABLE"
-  | "EVIDENCE_MISSING"
-  | "SOURCE_UNAVAILABLE"
-  | "MAX_ROUNDS_EXCEEDED"
-  | "FIX_VERSION_BREAKING"
-  | "PACKAGE_DEPRECATED"
-  | "RATE_LIMIT";
+export type ReasonCode = (typeof REASON_CODES)[number];
 
 /** 证据链。 */
 export interface Evidence {

@@ -8,6 +8,7 @@ export { triage } from "./engine.js";
 export { analyzeUsage } from "./usage.js";
 export { matchAdvisories } from "./osv.js";
 export { compareVersions, isVersionAffected, parseVersion } from "./version.js";
+export { REASON_CODES } from "./types.js";
 export type {
   Decision,
   DecisionLogRow,

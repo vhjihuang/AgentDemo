@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-11-20T22:50:00+08:00",
+  "provenance": {
+    "osvQuery": {
+      "endpoint": "https://api.osv.dev/v1/query",
+      "request": "POST { package: { name: 'lodash', ecosystem: 'npm' }, version }",
+      "note": "冻结快照。测试运行期禁止实时请求外部 API，否则边界用例会随上游数据漂移。"
+    },
+    "npmRegistry": {
+      "endpoint": "https://registry.npmjs.org/lodash/{version}",
+      "note": "package-lock.json 中的 integrity 取自真实 registry，未伪造。"
+    }
+  },
+  "advisories": {
+    "GHSA-29mw-wpgm-hmr9": {
+      "cve": "CVE-2020-28500",
+      "summary": "Regular Expression Denial of Service (ReDoS) in lodash",
+      "package": "lodash",
+      "affectedFunctions": ["toNumber", "trim", "trimEnd"],
+      "range": { "introduced": "4.0.0", "fixed": "4.17.21" }
+    },
+    "GHSA-35jh-r3h4-6jhm": {
+      "cve": "CVE-2021-23337",
+      "summary": "Command Injection in lodash",
+      "package": "lodash",
+      "affectedFunctions": ["template"],
+      "range": { "introduced": "0", "fixed": "4.17.21" }
+    },
+    "GHSA-r5fr-rjxr-66jc": {
+      "cve": "CVE-2026-4800",
+      "summary": "lodash vulnerable to Code Injection via `_.template` imports key names",
+      "package": "lodash",
+      "affectedFunctions": ["template"],
+      "range": { "introduced": "4.0.0", "fixed": "4.18.0" }
+    },
+    "GHSA-xxjr-mmjv-4gpg": {
+      "cve": "CVE-2025-13465",
+      "summary": "Lodash has Prototype Pollution Vulnerability in `_.unset`, `_.omit`, and `_.pullAt` functions",
+      "package": "lodash",
+      "affectedFunctions": ["unset", "omit", "pullAt"],
+      "range": { "introduced": "4.0.0", "fixed": "4.17.23" }
+    }
+  },
+  "repos": {
+    "repo-A": {
+      "installedVersion": "4.17.20",
+      "entryFile": "src/notify.js",
+      "usage": "显式 import lodash 并调用 _.template",
+      "expected": [
+        { "advisory": "GHSA-29mw-wpgm-hmr9", "decision": "NOT_AFFECTED", "reason": "NOT_CALLED" },
+        { "advisory": "GHSA-35jh-r3h4-6jhm", "decision": "AFFECTED", "reason": "CALLED" },
+        { "advisory": "GHSA-r5fr-rjxr-66jc", "decision": "AFFECTED", "reason": "CALLED" },
+        { "advisory": "GHSA-xxjr-mmjv-4gpg", "decision": "NOT_AFFECTED", "reason": "NOT_CALLED" }
+      ],
+      "rationale": "同版本 4 条漏洞中，只有影响 template 的两条被调用；其余两条虽版本命中但函数未被调用。"
+    },
+    "repo-B": {
+      "installedVersion": "4.17.20",
+      "entryFile": "src/notify.js",
+      "usage": "声明依赖但全程未 import lodash",
+      "expected": [
+        { "advisory": "GHSA-29mw-wpgm-hmr9", "decision": "NOT_AFFECTED", "reason": "NOT_CALLED" },
+        { "advisory": "GHSA-35jh-r3h4-6jhm", "decision": "NOT_AFFECTED", "reason": "NOT_CALLED" },
+        { "advisory": "GHSA-r5fr-rjxr-66jc", "decision": "NOT_AFFECTED", "reason": "NOT_CALLED" },
+        { "advisory": "GHSA-xxjr-mmjv-4gpg", "decision": "NOT_AFFECTED", "reason": "NOT_CALLED" }
+      ],
+      "rationale": "验证「仅声明依赖」不得判为受影响，是最容易被误报的场景。"
+    },
+    "repo-C": {
+      "installedVersion": "4.17.21",
+      "entryFile": "src/notify.js",
+      "usage": "显式 import lodash 并调用 _.template",
+      "expected": [
+        { "advisory": "GHSA-r5fr-rjxr-66jc", "decision": "AFFECTED", "reason": "CALLED" },
+        { "advisory": "GHSA-xxjr-mmjv-4gpg", "decision": "NOT_AFFECTED", "reason": "NOT_CALLED" }
+      ],
+      "rationale": "4.17.21 的 OSV 查询只返回 2 条(29mw/35jh 已修复，不会出现在结果中)。剩余两条一条被调用、一条未被调用，验证同一版本下按调用面区分。"
+    },
+    "repo-D": {
+      "installedVersion": "4.17.20",
+      "entryFile": "src/notify.js",
+      "usage": "包名来自环境变量，动态 import，静态不可解析",
+      "expected": [
+        { "advisory": "GHSA-29mw-wpgm-hmr9", "decision": "NEED_MANUAL", "reason": "DYN_IMPORT_UNRESOLVABLE" },
+        { "advisory": "GHSA-35jh-r3h4-6jhm", "decision": "NEED_MANUAL", "reason": "DYN_IMPORT_UNRESOLVABLE" },
+        { "advisory": "GHSA-r5fr-rjxr-66jc", "decision": "NEED_MANUAL", "reason": "DYN_IMPORT_UNRESOLVABLE" },
+        { "advisory": "GHSA-xxjr-mmjv-4gpg", "decision": "NEED_MANUAL", "reason": "DYN_IMPORT_UNRESOLVABLE" }
+      ],
+      "rationale": "静态分析无法确定运行时加载的模块，必须升级人工，不得猜测为 AFFECTED 或 NOT_AFFECTED。"
+    }
+  },
+  "generatedRepoE": {
+    "description": "配额测试用仓库，由脚本按 50 个受影响包生成，不纳入版本控制的具体产物",
+    "count": 50
+  }
+}

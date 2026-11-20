@@ -1,13 +1,24 @@
 /**
- * 决策引擎：把 lockfile、OSV 快照、静态调用面三路信息合成最终结论。
+ * 决策引擎：把 lockfile、OSV 源、静态调用面三路信息合成最终结论。
  *
- * 当前只覆盖 TC-01 所需路径（成功判定 + 工单 + 事件流）。
- * 重试、配额、并发、持久化等能力按验收规格后续补齐，不提前实现。
+ * 外部依赖通过 ports 注入，默认实现基于冻结快照与内存工单。
+ * 重试只处理「可恢复的外部调用失败」，不掩盖业务判定错误。
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { ADVISORY_FUNCTIONS } from "./advisory-functions.js";
-import { matchAdvisories, type AdvisoryMatch } from "./osv.js";
+import type { AdvisoryMatch } from "./osv.js";
+import {
+  createDefaultRetryPolicy,
+  createInMemoryTicketSink,
+  createNoopAlertSink,
+  createSnapshotOsvSource,
+  type AlertSink,
+  type OsvSource,
+  type RetryPolicy,
+  type TicketSink,
+} from "./ports.js";
+import { RetryExhaustedError, withRetry } from "./retry.js";
 import { analyzeUsage, type UsageResult } from "./usage.js";
 import type {
   DecisionLogRow,
@@ -17,6 +28,15 @@ import type {
   VulnerabilityDecisionRow,
 } from "./types.js";
 
+/** 可替换的依赖集合。测试通过它注入故障。 */
+export interface TriageDependencies {
+  osvSource?: OsvSource;
+  ticketSink?: TicketSink;
+  alertSink?: AlertSink;
+  retry?: RetryPolicy;
+  runId?: string;
+}
+
 interface LockfileShape {
   packages?: Record<string, { version?: string; dependencies?: Record<string, string> }>;
 }
@@ -25,6 +45,9 @@ interface InstalledPackage {
   name: string;
   version: string;
 }
+
+/** 包级 OSV 查询失败时使用的占位标识，与 package 组合构成唯一键。 */
+const OSV_FAILURE_ID = "OSV_QUERY_FAILED";
 
 /** 从 package-lock.json 读取根依赖及其已安装版本。 */
 function readInstalledPackages(repoPath: string): InstalledPackage[] {
@@ -103,21 +126,72 @@ function decide(
   return { ...base, decision: "NOT_AFFECTED", reason: "NOT_CALLED" };
 }
 
+/** 构造包级查询失败记录。decision 必须为 null，禁止冒充任何业务结论。 */
+function createOsvFailureRow(
+  installed: InstalledPackage,
+  error: RetryExhaustedError
+): VulnerabilityDecisionRow {
+  return {
+    cveId: OSV_FAILURE_ID,
+    package: installed.name,
+    installedVersion: installed.version,
+    decision: null,
+    executionStatus: "FAILED_PERMANENT",
+    deferReason: null,
+    reason: "SOURCE_UNAVAILABLE",
+    evidence: null,
+    // 失败次数 = 总尝试次数 - 1
+    retryCount: Math.max(0, error.attempts - 1),
+    lastError: error.message,
+    manuallyOverridden: false,
+    priorityScore: 0,
+  };
+}
+
 /** 执行一次分诊，产出决策、工单与事件流。 */
-export function triage(input: TriageInput): TriageResult {
-  const runId = `run-${Date.now()}`;
+export async function triage(
+  input: TriageInput,
+  overrides: TriageDependencies = {}
+): Promise<TriageResult> {
+  const runId = overrides.runId ?? `run-${Date.now()}`;
+  const osvSource =
+    overrides.osvSource ?? createSnapshotOsvSource(input.osvSnapshot, ADVISORY_FUNCTIONS);
+  const ticketSink = overrides.ticketSink ?? createInMemoryTicketSink();
+  const alertSink = overrides.alertSink ?? createNoopAlertSink();
+  const retry = overrides.retry ?? createDefaultRetryPolicy();
+
   const decisions: VulnerabilityDecisionRow[] = [];
   const tickets: TicketRow[] = [];
   const log: DecisionLogRow[] = [];
   let seq = 0;
 
   for (const installed of readInstalledPackages(input.repoPath)) {
-    const advisories = matchAdvisories(
-      input.osvSnapshot,
-      installed.name,
-      installed.version,
-      ADVISORY_FUNCTIONS
-    );
+    let advisories: AdvisoryMatch[];
+    let osvAttempts: number;
+    try {
+      const outcome = await withRetry(
+        () => osvSource.query(installed.name, installed.version),
+        retry
+      );
+      advisories = outcome.value;
+      osvAttempts = outcome.attempts;
+    } catch (error) {
+      const exhausted =
+        error instanceof RetryExhaustedError
+          ? error
+          : new RetryExhaustedError(retry.maxAttempts, error);
+      const row = createOsvFailureRow(installed, exhausted);
+      decisions.push(row);
+      await alertSink.notify({
+        kind: "osv_failure",
+        package: installed.name,
+        cveId: null,
+        message: row.lastError ?? "OSV 查询失败",
+      });
+      continue;
+    }
+
+    const osvRetryCount = osvAttempts - 1;
     const usage = analyzeUsage(input.repoPath, installed.name);
 
     for (const advisory of advisories) {
@@ -125,19 +199,54 @@ export function triage(input: TriageInput): TriageResult {
       log.push({ runId, cveId: advisory.advisoryId, event: "code_check", seq: ++seq });
 
       const row = decide(advisory, usage, installed.name, installed.version);
-      decisions.push(row);
-      log.push({ runId, cveId: advisory.advisoryId, event: "decision", seq: ++seq });
+      row.retryCount = osvRetryCount;
 
       if (row.decision === "AFFECTED" && row.executionStatus === "SUCCEEDED") {
-        tickets.push({
-          id: `ticket-${tickets.length + 1}`,
-          cveId: advisory.advisoryId,
-          package: installed.name,
-          fixVersion: advisory.range.fixed,
-          status: "open",
-          runId,
-        });
+        try {
+          const created = await withRetry(
+            () =>
+              ticketSink.create({
+                cveId: advisory.advisoryId,
+                package: installed.name,
+                fixVersion: advisory.range.fixed,
+              }),
+            retry
+          );
+          row.retryCount += created.attempts - 1;
+          tickets.push({
+            id: created.value.id,
+            cveId: advisory.advisoryId,
+            package: installed.name,
+            fixVersion: advisory.range.fixed,
+            status: "open",
+            runId,
+          });
+        } catch (error) {
+          const exhausted =
+            error instanceof RetryExhaustedError
+              ? error
+              : new RetryExhaustedError(retry.maxAttempts, error);
+          // 建单失败时不得停留在完成态，也不得伪造工单
+          row.executionStatus = "FAILED_PERMANENT";
+          row.retryCount += Math.max(0, exhausted.attempts - 1);
+          row.lastError = exhausted.message;
+          log.push({
+            runId,
+            cveId: advisory.advisoryId,
+            event: "ticket_create_failed",
+            seq: ++seq,
+          });
+          await alertSink.notify({
+            kind: "ticket_failure",
+            package: installed.name,
+            cveId: advisory.advisoryId,
+            message: exhausted.message,
+          });
+        }
       }
+
+      decisions.push(row);
+      log.push({ runId, cveId: advisory.advisoryId, event: "decision", seq: ++seq });
     }
   }
 

@@ -16,8 +16,8 @@ function loadSnapshot(version: string): unknown {
 }
 
 describe("TC-11 事件流完整", () => {
-  test("每条漏洞的事件顺序为 osv_query → code_check → decision，且 seq 单调递增", () => {
-    const result = triage({
+  test("每条漏洞的事件顺序为 osv_query → code_check → decision，且 seq 单调递增", async () => {
+    const result = await triage({
       repoPath: join(FIXTURES, "repos", "repo-A"),
       osvSnapshot: loadSnapshot("4.17.20"),
     });
@@ -41,8 +41,8 @@ describe("TC-11 事件流完整", () => {
 });
 
 describe("TC-12 失败必须带原因码", () => {
-  test("NEED_MANUAL 必须带枚举内原因码", () => {
-    const result = triage({
+  test("NEED_MANUAL 必须带枚举内原因码", async () => {
+    const result = await triage({
       repoPath: join(FIXTURES, "repos", "repo-D"),
       osvSnapshot: loadSnapshot("4.17.20"),
     });
@@ -55,8 +55,8 @@ describe("TC-12 失败必须带原因码", () => {
     }
   });
 
-  test("正常路径不应产生 NEED_MANUAL", () => {
-    const result = triage({
+  test("正常路径不应产生 NEED_MANUAL", async () => {
+    const result = await triage({
       repoPath: join(FIXTURES, "repos", "repo-A"),
       osvSnapshot: loadSnapshot("4.17.20"),
     });

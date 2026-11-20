@@ -115,7 +115,7 @@ decision_log(run_id, cve_id, event, payload, seq)
 - **故障注入**：TC-05 前两次返回 504、第三次返回正常；TC-05b 全部返回超时。
 - **预期数据库状态**：
   - TC-05：`executionStatus` 经历 `RETRYING → SUCCEEDED`，最终 `decision=AFFECTED`，`retryCount=2`。
-  - TC-05b：`executionStatus=FAILED_PERMANENT`，`decision=null`，`retryCount=3`，`lastError` 非空。
+  - TC-05b：`executionStatus=FAILED_PERMANENT`，`decision=null`，`retryCount=2`（3 次尝试全部失败，重试次数为 2），`lastError` 非空。
 - **预期外部副作用**：
   - TC-05：OSV 调用 3 次，重试间隔递增且带抖动。
   - TC-05b：告警 1 次，人工队列通知 1 次，工单创建 0 次。
@@ -153,7 +153,7 @@ decision_log(run_id, cve_id, event, payload, seq)
 
 | 配置 | 默认 | 说明 |
 |------|------|------|
-| `RETRY_MAX` | 3 | 外部调用重试上限 |
+| `RETRY_MAX` | 3 | 外部调用总尝试次数（含首次）；失败重试次数为 2 |
 | `RETRY_BASE_MS` | 200 | 指数退避基数，带抖动 |
 | `MAX_TICKETS_PER_RUN` | 10 | 单次运行建单上限 |
 | `RUNNING_TIMEOUT_MS` | 600000 | `RUNNING` 超时回收阈值（10 分钟） |

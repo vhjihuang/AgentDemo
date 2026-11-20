@@ -36,9 +36,9 @@ function loadSnapshot(version: string): unknown {
 
 describe("判定正确性", () => {
   // 夹具 repo-A：lodash 4.17.20，显式调用 _.template
-  test("TC-01 版本命中且调用受影响 API → AFFECTED，且写入工单与证据", () => {
+  test("TC-01 版本命中且调用受影响 API → AFFECTED，且写入工单与证据", async () => {
     const expected = manifest.repos["repo-A"];
-    const result = triage({
+    const result = await triage({
       repoPath: join(FIXTURES, "repos", "repo-A"),
       osvSnapshot: loadSnapshot("4.17.20"),
     });
@@ -78,9 +78,9 @@ describe("判定正确性", () => {
   });
 
   // 夹具 repo-B：lodash 4.17.20，声明依赖但未 import
-  test("TC-02 版本命中但未调用任何函数 → NOT_AFFECTED/NOT_CALLED，且不建工单", () => {
+  test("TC-02 版本命中但未调用任何函数 → NOT_AFFECTED/NOT_CALLED，且不建工单", async () => {
     const expected = manifest.repos["repo-B"];
-    const result = triage({
+    const result = await triage({
       repoPath: join(FIXTURES, "repos", "repo-B"),
       osvSnapshot: loadSnapshot("4.17.20"),
     });
@@ -99,9 +99,9 @@ describe("判定正确性", () => {
   });
 
   // 夹具 repo-C：lodash 4.17.21，显式调用 _.template
-  test("TC-03 部分修复版本 → r5fr 判 AFFECTED，xxjr 判 NOT_CALLED，已修复漏洞不出现在结果中", () => {
+  test("TC-03 部分修复版本 → r5fr 判 AFFECTED，xxjr 判 NOT_CALLED，已修复漏洞不出现在结果中", async () => {
     const expected = manifest.repos["repo-C"];
-    const result = triage({
+    const result = await triage({
       repoPath: join(FIXTURES, "repos", "repo-C"),
       osvSnapshot: loadSnapshot("4.17.21"),
     });
@@ -123,9 +123,9 @@ describe("判定正确性", () => {
   });
 
   // 夹具 repo-D：动态 import
-  test("TC-04 动态引入不可解析 → NEED_MANUAL/DYN_IMPORT_UNRESOLVABLE，禁止猜测", () => {
+  test("TC-04 动态引入不可解析 → NEED_MANUAL/DYN_IMPORT_UNRESOLVABLE，禁止猜测", async () => {
     const expected = manifest.repos["repo-D"];
-    const result = triage({
+    const result = await triage({
       repoPath: join(FIXTURES, "repos", "repo-D"),
       osvSnapshot: loadSnapshot("4.17.20"),
     });

@@ -114,4 +114,11 @@ describe("fixture 自检", () => {
       expect(advisory.affectedFunctions.length, `${id} 缺少受影响函数`).toBeGreaterThan(0);
     }
   });
+
+  it("实现侧的受影响函数映射与 manifest 完全一致", async () => {
+    const { ADVISORY_FUNCTIONS } = await import("../../src/triage/advisory-functions.js");
+    for (const [id, advisory] of Object.entries(manifest.advisories)) {
+      expect(ADVISORY_FUNCTIONS[id], `实现侧缺少 ${id}`).toEqual(advisory.affectedFunctions);
+    }
+  });
 });

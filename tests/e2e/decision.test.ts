@@ -10,6 +10,7 @@ import { triage } from "../../src/triage/index.js";
 import {
   assertAffectedHasEvidence,
   assertAffectedHasTicket,
+  assertNeedManualHasReason,
   assertNoDuplicateTickets,
   assertNoSilentDowngrade,
 } from "../helpers/assertions.js";
@@ -77,13 +78,70 @@ describe("判定正确性", () => {
   });
 
   // 夹具 repo-B：lodash 4.17.20，声明依赖但未 import
-  test.todo("TC-02 版本命中但未调用任何函数 → NOT_AFFECTED/NOT_CALLED，且不建工单");
+  test("TC-02 版本命中但未调用任何函数 → NOT_AFFECTED/NOT_CALLED，且不建工单", () => {
+    const expected = manifest.repos["repo-B"];
+    const result = triage({
+      repoPath: join(FIXTURES, "repos", "repo-B"),
+      osvSnapshot: loadSnapshot("4.17.20"),
+    });
+
+    expect(result.decisions).toHaveLength(expected.expected.length);
+    for (const item of expected.expected) {
+      const row = result.decisions.find((d) => d.cveId === item.advisory);
+      expect(row, `缺少 ${item.advisory} 的决策`).toBeDefined();
+      expect(row!.decision, `${item.advisory} 结论不符`).toBe(item.decision);
+      expect(row!.reason, `${item.advisory} 原因码不符`).toBe(item.reason);
+    }
+
+    // 仅声明依赖不得产生任何工单
+    expect(result.tickets).toHaveLength(0);
+    assertNoSilentDowngrade(result.decisions);
+  });
 
   // 夹具 repo-C：lodash 4.17.21，显式调用 _.template
-  test.todo("TC-03 部分修复版本 → r5fr 判 AFFECTED，xxjr 判 NOT_CALLED，且不读未命中源码");
+  test("TC-03 部分修复版本 → r5fr 判 AFFECTED，xxjr 判 NOT_CALLED，已修复漏洞不出现在结果中", () => {
+    const expected = manifest.repos["repo-C"];
+    const result = triage({
+      repoPath: join(FIXTURES, "repos", "repo-C"),
+      osvSnapshot: loadSnapshot("4.17.21"),
+    });
+
+    // 4.17.21 的 OSV 结果只含 r5fr 与 xxjr，已修复的 29mw/35jh 不得出现
+    expect(result.decisions.map((d) => d.cveId).sort()).toEqual(
+      expected.expected.map((item) => item.advisory).sort()
+    );
+
+    for (const item of expected.expected) {
+      const row = result.decisions.find((d) => d.cveId === item.advisory);
+      expect(row!.decision, `${item.advisory} 结论不符`).toBe(item.decision);
+      expect(row!.reason, `${item.advisory} 原因码不符`).toBe(item.reason);
+    }
+
+    // 同版本下只有仍受影响且被调用的 r5fr 建单
+    expect(result.tickets.map((t) => t.cveId)).toEqual(["GHSA-r5fr-rjxr-66jc"]);
+    expect(result.tickets[0].fixVersion).toBe("4.18.0");
+  });
 
   // 夹具 repo-D：动态 import
-  test.todo("TC-04 动态引入不可解析 → NEED_MANUAL/DYN_IMPORT_UNRESOLVABLE，禁止猜测");
+  test("TC-04 动态引入不可解析 → NEED_MANUAL/DYN_IMPORT_UNRESOLVABLE，禁止猜测", () => {
+    const expected = manifest.repos["repo-D"];
+    const result = triage({
+      repoPath: join(FIXTURES, "repos", "repo-D"),
+      osvSnapshot: loadSnapshot("4.17.20"),
+    });
+
+    expect(result.decisions).toHaveLength(expected.expected.length);
+    for (const item of expected.expected) {
+      const row = result.decisions.find((d) => d.cveId === item.advisory);
+      expect(row, `缺少 ${item.advisory} 的决策`).toBeDefined();
+      expect(row!.decision, `${item.advisory} 结论不符`).toBe(item.decision);
+      expect(row!.reason, `${item.advisory} 原因码不符`).toBe(item.reason);
+    }
+
+    // 无法判定时不得建单，也不得冒充不受影响
+    expect(result.tickets).toHaveLength(0);
+    assertNeedManualHasReason(result.decisions);
+  });
 
   test.todo("TC-10 版本区间边界 → 预发布版本与开闭区间的比较结果与 fixture 期望逐条一致");
 

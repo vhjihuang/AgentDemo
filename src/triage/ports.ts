@@ -81,11 +81,14 @@ export function createNoopAlertSink(): AlertSink {
   };
 }
 
-/** 默认重试策略：3 次尝试，200ms 起指数退避。 */
-export function createDefaultRetryPolicy(): RetryPolicy {
+/** 重试策略：按配置构造，sleep 默认为真实等待。 */
+export function createRetryPolicy(options: {
+  maxAttempts: number;
+  baseDelayMs: number;
+}): RetryPolicy {
   return {
-    maxAttempts: 3,
-    baseDelayMs: 200,
+    maxAttempts: options.maxAttempts,
+    baseDelayMs: options.baseDelayMs,
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   };
 }

@@ -5,6 +5,8 @@
  */
 export { runAgentLoop } from "./loop.js";
 export type { AgentLoopOptions, AgentLoopResult } from "./loop.js";
+export { createOpenAiChatModel } from "./openai-model.js";
+export type { OpenAiChatModelOptions } from "./openai-model.js";
 export { investigateNeedsManual, parseSuggestion } from "./investigate.js";
 export type { InvestigateOptions } from "./investigate.js";
 export { createInvestigationTools } from "./tools.js";

@@ -91,16 +91,19 @@ export function assertDeferredWellFormed(rows: VulnerabilityDecisionRow[]): void
 }
 
 /**
- * 不变式 7：防饥饿。多次运行后，不应有记录始终停留在 PENDING。
+ * 不变式 7：排队记录不得丢失。
+ *
+ * 容量上限会合理地让部分记录持续排队，因此「仍为 PENDING」不能用来判定饥饿。
+ * 真正的失败是记录既没有出队、也查不到——即从库中静默消失。
  * @param snapshots 按运行轮次排列的记录快照
  */
 export function assertNoStarvation(snapshots: VulnerabilityDecisionRow[][]): void {
   if (snapshots.length < 2) return;
   const first = snapshots[0];
   const last = snapshots[snapshots.length - 1];
-  const lastKeys = new Set(last.filter((r) => r.executionStatus !== "PENDING").map((r) => `${r.cveId}|${r.package}`));
-  const starved = first
+  const lastKeys = new Set(last.map((r) => `${r.cveId}|${r.package}`));
+  const lost = first
     .filter((r) => r.executionStatus === "PENDING" && !lastKeys.has(`${r.cveId}|${r.package}`))
     .map((r) => `${r.cveId}|${r.package}`);
-  assert.equal(starved.length, 0, `存在长期饥饿的排队记录: ${starved.join(", ") || "(none)"}`);
+  assert.equal(lost.length, 0, `排队记录丢失: ${lost.join(", ") || "(none)"}`);
 }

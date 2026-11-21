@@ -138,7 +138,7 @@ decision_log(run_id, cve_id, event, payload, seq)
 
 ### 6.3 TC-08 / TC-08b：配额与排队（重写）
 
-- **前置条件**：repo-E（50 个受影响包，脚本生成）；`MAX_TICKETS_PER_RUN = 10`。
+- **前置条件**：repo-E（50 个受影响包，脚本生成）；`MAX_OPEN_TICKETS = 10`（未关闭工单总量上限）。
 - **故障注入**：TC-08 无；TC-08b 关闭 5 张工单模拟槽位释放。
 - **预期数据库状态**：
   - TC-08：10 条 `SUCCEEDED`；40 条 `PENDING` + `RATE_LIMIT` + `decision=null`。
@@ -155,10 +155,11 @@ decision_log(run_id, cve_id, event, payload, seq)
 |------|------|------|
 | `RETRY_MAX` | 3 | 外部调用总尝试次数（含首次）；失败重试次数为 2 |
 | `RETRY_BASE_MS` | 200 | 指数退避基数，带抖动 |
-| `MAX_TICKETS_PER_RUN` | 10 | 单次运行建单上限 |
+| `MAX_OPEN_TICKETS` | 10 | 未关闭工单总量上限（WIP 限制），超出部分排队 |
 | `RUNNING_TIMEOUT_MS` | 600000 | `RUNNING` 超时回收阈值（10 分钟） |
 | `MAX_ROUNDS` | 10 | Agent 单条分析循环上限 |
 | `CIRCUIT_BREAKER_THRESHOLD` | 5 | 连续失败触发熔断的次数 |
+| `CIRCUIT_BREAKER_RESET_MS` | 30000 | 熔断打开后进入 HALF_OPEN 试探的冷却时间 |
 
 熔断器按**数据源整体**共享一个实例，不为单条漏洞独立熔断。
 

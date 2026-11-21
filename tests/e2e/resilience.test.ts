@@ -2,12 +2,12 @@
  * 失败与降级用例（AC-4 / AC-5 / AC-11）。
  *
  * 重点不是「能成功」，而是「失败时不得伪装成成功」。
- * TC-05/05b/07/07b 已落地；TC-09/15 仍待实现。
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import {
+  createDefaultConfig,
   matchAdvisories,
   triage,
   type AlertPayload,
@@ -17,7 +17,11 @@ import {
 } from "../../src/triage/index.js";
 import { ADVISORY_FUNCTIONS } from "../../src/triage/advisory-functions.js";
 import type { AdvisoryMatch } from "../../src/triage/osv.js";
-import { assertAffectedHasTicket, assertNoSilentDowngrade } from "../helpers/assertions.js";
+import {
+  assertAffectedHasTicket,
+  assertNeedManualHasReason,
+  assertNoSilentDowngrade,
+} from "../helpers/assertions.js";
 
 const FIXTURES = join(import.meta.dirname, "..", "fixtures");
 
@@ -159,7 +163,53 @@ describe("失败与降级", () => {
     assertAffectedHasTicket(result.decisions, result.tickets);
   });
 
-  test.todo("TC-09 代码检查返回空 → 禁止 AFFECTED，转 NEED_MANUAL/EVIDENCE_MISSING");
+  test("TC-09 代码检查返回空 → 禁止 AFFECTED，转 NEED_MANUAL/EVIDENCE_MISSING", async () => {
+    const snapshot = loadSnapshot("4.17.20");
+    const result = await triage(
+      { repoPath: repoPath("repo-A"), osvSnapshot: snapshot },
+      {
+        analyzer: {
+          async analyze() {
+            return null;
+          },
+        },
+      }
+    );
 
-  test.todo("TC-15 Agent 循环达到 MAX_ROUNDS → 终止并给出 MAX_ROUNDS_EXCEEDED，不得挂起");
+    // 检查不出结果时，四条漏洞都不能下业务结论
+    expect(result.decisions).toHaveLength(4);
+    for (const row of result.decisions) {
+      expect(row.decision, `${row.cveId} 不得给出业务结论`).toBe("NEED_MANUAL");
+      expect(row.reason, `${row.cveId} 原因码不符`).toBe("EVIDENCE_MISSING");
+    }
+    expect(result.tickets).toHaveLength(0);
+    assertNeedManualHasReason(result.decisions);
+  });
+
+  test("TC-15 分析轮次超过 MAX_ROUNDS → NEED_MANUAL/MAX_ROUNDS_EXCEEDED，不得挂起", async () => {
+    const snapshot = loadSnapshot("4.17.20");
+    const result = await triage(
+      { repoPath: repoPath("repo-A"), osvSnapshot: snapshot },
+      {
+        config: { ...createDefaultConfig(), maxRounds: 3 },
+        analyzer: {
+          async analyze() {
+            // 超过上限 1 轮，必须被终止而不是继续循环
+            return {
+              rounds: 4,
+              usage: { importsPackage: true, dynamicImport: false, callSites: [] },
+            };
+          },
+        },
+      }
+    );
+
+    expect(result.decisions).toHaveLength(4);
+    for (const row of result.decisions) {
+      expect(row.decision, `${row.cveId} 不得给出业务结论`).toBe("NEED_MANUAL");
+      expect(row.reason, `${row.cveId} 原因码不符`).toBe("MAX_ROUNDS_EXCEEDED");
+    }
+    expect(result.tickets).toHaveLength(0);
+    assertNeedManualHasReason(result.decisions);
+  }, 5_000);
 });

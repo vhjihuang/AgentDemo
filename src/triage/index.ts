@@ -41,6 +41,8 @@ export type { AnalysisOutcome, Analyzer } from "./analyzer.js";
 
 export { createInMemoryStore } from "./store.js";
 export type { InMemoryStoreOptions, StoredDecisionRow, TriageStore } from "./store.js";
+export { createFileStore } from "./store-file.js";
+export type { FileStoreOptions } from "./store-file.js";
 
 export {
   CircuitOpenError,

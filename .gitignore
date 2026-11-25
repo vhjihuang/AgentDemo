@@ -7,6 +7,3 @@
 .vscode
 node_modules
 dist
-
-# 评测产物（每次运行重新生成）
-eval/report.json

@@ -1,9 +1,0 @@
-{
-  "name": "fixture-repo-c",
-  "version": "1.0.0",
-  "private": true,
-  "type": "module",
-  "dependencies": {
-    "lodash": "4.17.21"
-  }
-}
